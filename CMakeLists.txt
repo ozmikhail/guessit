@@ -9,3 +9,4 @@ add_subdirectory(core)
 
 add_executable(guessit main.cpp)
 target_link_libraries(guessit PRIVATE guessit_core)
+target_compile_options(guessit PRIVATE -Wall -Wextra -Wpedantic)
