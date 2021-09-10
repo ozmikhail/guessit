@@ -14,6 +14,10 @@ public:
     bool hasStudent(const std::string& id) const;
     bool empty() const { return m_subjects.empty() && m_students.empty(); }
 
+    void addSubject(Subject sub);
+    void removeSubject(const std::string& name);
+    const Subject& subject(const std::string& name) const;
+
 private:
     std::map<std::string, Subject> m_subjects;
     std::map<std::string, Student> m_students;
