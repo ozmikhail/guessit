@@ -27,12 +27,25 @@ static bool parseKv(const std::string& tok, std::string& key, double& val) {
 static void printHelp() {
     std::cout <<
         "\nguessit commands:\n"
-        "  subject add <name> [max=N] [weight=W]\n"
+        "  subject add <name> [max=N] [weight=W] [pass=P]\n"
         "  subject list\n"
         "  subject remove <name>\n"
+        "  student add <id> <name...>\n"
+        "  student list\n"
+        "  student remove <id>\n"
+        "  student rename <id> <new name...>\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
+}
+
+static std::string joinFrom(const std::vector<std::string>& a, std::size_t start) {
+    std::string s;
+    for (std::size_t i = start; i < a.size(); ++i) {
+        if (i > start) s.push_back(' ');
+        s += a[i];
+    }
+    return s;
 }
 
 static void cmdSubjectAdd(Gradebook& book, const std::vector<std::string>& args) {
@@ -77,6 +90,61 @@ static void cmdSubjectRemove(Gradebook& book, const std::vector<std::string>& ar
     std::cout << "removed subject " << args[0] << '\n';
 }
 
+static void cmdStudentAdd(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() < 2)
+        throw GradeError("usage: student add <id> <name...>");
+    Student s;
+    s.id = args[0];
+    s.name = joinFrom(args, 1);
+    book.addStudent(std::move(s));
+    std::cout << "added student " << args[0] << '\n';
+}
+
+static void cmdStudentList(const Gradebook& book) {
+    if (book.students().empty()) {
+        std::cout << "(no students)\n";
+        return;
+    }
+    std::size_t wid = 2, wname = 4;
+    for (const auto& [id, st] : book.students()) {
+        wid = std::max(wid, id.size());
+        wname = std::max(wname, st.name.size());
+    }
+    std::cout << "  " << std::left << std::setw(static_cast<int>(wid)) << "id"
+              << "  " << std::setw(static_cast<int>(wname)) << "name" << '\n';
+    for (const auto& [id, st] : book.students())
+        std::cout << "  " << std::left << std::setw(static_cast<int>(wid)) << id
+                  << "  " << std::setw(static_cast<int>(wname)) << st.name << '\n';
+}
+
+static void cmdStudentRemove(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() != 1)
+        throw GradeError("usage: student remove <id>");
+    book.removeStudent(args[0]);
+    std::cout << "removed student " << args[0] << '\n';
+}
+
+static void cmdStudentRename(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() < 2)
+        throw GradeError("usage: student rename <id> <new name...>");
+    book.renameStudent(args[0], joinFrom(args, 1));
+    std::cout << "renamed " << args[0] << " to " << joinFrom(args, 1) << '\n';
+}
+
+static bool dispatchStudent(Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "student") return false;
+    if (tokens.size() < 2)
+        throw GradeError("usage: student <add|list|remove|rename> ...");
+    std::vector<std::string> args(tokens.begin() + 2, tokens.end());
+    const std::string& sub = tokens[1];
+    if (sub == "add") cmdStudentAdd(book, args);
+    else if (sub == "list") cmdStudentList(book);
+    else if (sub == "remove") cmdStudentRemove(book, args);
+    else if (sub == "rename") cmdStudentRename(book, args);
+    else throw GradeError("unknown student subcommand '" + sub + "'");
+    return true;
+}
+
 static bool dispatchSubject(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "subject") return false;
     if (tokens.size() < 2)
@@ -114,6 +182,7 @@ int main() {
         try {
             auto tokens = tokenize(line);
             if (dispatchSubject(book, tokens)) continue;
+            if (dispatchStudent(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
