@@ -35,3 +35,41 @@ const Subject& Gradebook::subject(const std::string& name) const {
         throw GradeError("no subject '" + name + "'");
     return it->second;
 }
+
+void Gradebook::addStudent(Student s) {
+    if (s.id.empty())
+        throw GradeError("student id cannot be empty");
+    if (s.name.empty())
+        throw GradeError("student name cannot be empty");
+    if (hasStudent(s.id))
+        throw GradeError("student id '" + s.id + "' already exists");
+    m_students.emplace(s.id, std::move(s));
+}
+
+void Gradebook::removeStudent(const std::string& id) {
+    if (m_students.erase(id) == 0)
+        throw GradeError("no student '" + id + "'");
+}
+
+void Gradebook::renameStudent(const std::string& id, const std::string& newName) {
+    if (newName.empty())
+        throw GradeError("student name cannot be empty");
+    auto it = m_students.find(id);
+    if (it == m_students.end())
+        throw GradeError("no student '" + id + "'");
+    it->second.name = newName;
+}
+
+const Student& Gradebook::student(const std::string& id) const {
+    auto it = m_students.find(id);
+    if (it == m_students.end())
+        throw GradeError("no student '" + id + "'");
+    return it->second;
+}
+
+Student& Gradebook::student(const std::string& id) {
+    auto it = m_students.find(id);
+    if (it == m_students.end())
+        throw GradeError("no student '" + id + "'");
+    return it->second;
+}

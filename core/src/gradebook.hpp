@@ -18,6 +18,12 @@ public:
     void removeSubject(const std::string& name);
     const Subject& subject(const std::string& name) const;
 
+    void addStudent(Student s);
+    void removeStudent(const std::string& id);
+    void renameStudent(const std::string& id, const std::string& newName);
+    const Student& student(const std::string& id) const;
+    Student& student(const std::string& id);
+
 private:
     std::map<std::string, Subject> m_subjects;
     std::map<std::string, Student> m_students;
