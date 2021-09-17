@@ -24,6 +24,9 @@ public:
     const Student& student(const std::string& id) const;
     Student& student(const std::string& id);
 
+    void setMark(const std::string& id, const std::string& subjectName, double score);
+    void clearMark(const std::string& id, const std::string& subjectName);
+
 private:
     std::map<std::string, Subject> m_subjects;
     std::map<std::string, Student> m_students;

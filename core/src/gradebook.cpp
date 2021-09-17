@@ -73,3 +73,17 @@ Student& Gradebook::student(const std::string& id) {
         throw GradeError("no student '" + id + "'");
     return it->second;
 }
+
+void Gradebook::setMark(const std::string& id, const std::string& subjectName, double score) {
+    const Subject& sub = subject(subjectName);
+    if (score < 0.0 || score > sub.maxMarks)
+        throw GradeError("score " + std::to_string(score) + " out of range [0, "
+                         + std::to_string(sub.maxMarks) + "] for " + subjectName);
+    student(id).marks[subjectName] = score;
+}
+
+void Gradebook::clearMark(const std::string& id, const std::string& subjectName) {
+    if (!hasSubject(subjectName))
+        throw GradeError("no subject '" + subjectName + "'");
+    student(id).marks.erase(subjectName);
+}
