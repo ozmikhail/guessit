@@ -87,3 +87,25 @@ void Gradebook::clearMark(const std::string& id, const std::string& subjectName)
         throw GradeError("no subject '" + subjectName + "'");
     student(id).marks.erase(subjectName);
 }
+
+double Gradebook::totalFor(const std::string& id) const {
+    const Student& s = student(id);
+    double sum = 0.0;
+    for (const auto& [name, sub] : m_subjects) {
+        auto it = s.marks.find(name);
+        if (it != s.marks.end()) sum += it->second;
+    }
+    return sum;
+}
+
+double Gradebook::maxTotal() const {
+    double sum = 0.0;
+    for (const auto& [_, sub] : m_subjects) sum += sub.maxMarks;
+    return sum;
+}
+
+double Gradebook::percentFor(const std::string& id) const {
+    double mx = maxTotal();
+    if (mx <= 0.0) return 0.0;
+    return totalFor(id) / mx * 100.0;
+}

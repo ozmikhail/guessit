@@ -27,6 +27,10 @@ public:
     void setMark(const std::string& id, const std::string& subjectName, double score);
     void clearMark(const std::string& id, const std::string& subjectName);
 
+    double totalFor(const std::string& id) const;
+    double maxTotal() const;
+    double percentFor(const std::string& id) const;
+
 private:
     std::map<std::string, Subject> m_subjects;
     std::map<std::string, Student> m_students;
