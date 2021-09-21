@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -34,6 +35,10 @@ static void printHelp() {
         "  student list\n"
         "  student remove <id>\n"
         "  student rename <id> <new name...>\n"
+        "  mark <id> <subject> <score>\n"
+        "  unmark <id> <subject>\n"
+        "  marks <id>                          show all marks for a student\n"
+        "  marks <id> <s1=score> [s2=...]      bulk record marks\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -145,6 +150,89 @@ static bool dispatchStudent(Gradebook& book, const std::vector<std::string>& tok
     return true;
 }
 
+static std::string fmtScore(double v) {
+    std::ostringstream oss;
+    if (v == std::floor(v)) oss << static_cast<long long>(v);
+    else oss << std::setprecision(6) << v;
+    return oss.str();
+}
+
+static void cmdMark(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() != 3)
+        throw GradeError("usage: mark <id> <subject> <score>");
+    double score = 0.0;
+    try { score = std::stod(args[2]); }
+    catch (...) { throw GradeError("invalid score '" + args[2] + "'"); }
+    book.setMark(args[0], args[1], score);
+    std::cout << "recorded " << args[1] << " = " << fmtScore(score)
+              << " for " << args[0] << '\n';
+}
+
+static void cmdUnmark(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() != 2)
+        throw GradeError("usage: unmark <id> <subject>");
+    book.clearMark(args[0], args[1]);
+    std::cout << "cleared " << args[1] << " for " << args[0] << '\n';
+}
+
+static void cmdMarksShow(const Gradebook& book, const std::string& id) {
+    const Student& s = book.student(id);
+    std::cout << s.id << "  " << s.name << '\n';
+    if (book.subjects().empty()) {
+        std::cout << "  (no subjects)\n";
+        return;
+    }
+    std::size_t w = 0;
+    for (const auto& [name, _] : book.subjects()) w = std::max(w, name.size());
+    for (const auto& [name, sub] : book.subjects()) {
+        auto it = s.marks.find(name);
+        std::cout << "  " << std::left << std::setw(static_cast<int>(w)) << name << "  ";
+        if (it == s.marks.end()) std::cout << "-";
+        else std::cout << fmtScore(it->second) << " / " << fmtScore(sub.maxMarks);
+        std::cout << '\n';
+    }
+    std::cout << "  total " << fmtScore(book.totalFor(id))
+              << " / " << fmtScore(book.maxTotal())
+              << "  (" << std::fixed << std::setprecision(2) << book.percentFor(id) << "%)\n";
+    std::cout.unsetf(std::ios::fixed);
+}
+
+static void cmdMarksBulk(Gradebook& book, const std::vector<std::string>& args) {
+    const std::string& id = args[0];
+    std::size_t set = 0;
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        std::string subject;
+        double score = 0.0;
+        if (!parseKv(args[i], subject, score))
+            throw GradeError("expected subject=score, got '" + args[i] + "'");
+        book.setMark(id, subject, score);
+        ++set;
+    }
+    std::cout << "recorded " << set << " mark(s) for " << id << '\n';
+}
+
+static bool dispatchMarks(Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "marks") return false;
+    if (tokens.size() < 2)
+        throw GradeError("usage: marks <id> [<s1=score> ...]");
+    if (tokens.size() == 2) {
+        cmdMarksShow(book, tokens[1]);
+    } else {
+        std::vector<std::string> args(tokens.begin() + 1, tokens.end());
+        cmdMarksBulk(book, args);
+    }
+    return true;
+}
+
+static bool dispatchMark(Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty()) return false;
+    std::vector<std::string> args(tokens.begin() + 1, tokens.end());
+    if (tokens[0] == "mark") cmdMark(book, args);
+    else if (tokens[0] == "unmark") cmdUnmark(book, args);
+    else return false;
+    return true;
+}
+
 static bool dispatchSubject(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "subject") return false;
     if (tokens.size() < 2)
@@ -183,6 +271,8 @@ int main() {
             auto tokens = tokenize(line);
             if (dispatchSubject(book, tokens)) continue;
             if (dispatchStudent(book, tokens)) continue;
+            if (dispatchMark(book, tokens)) continue;
+            if (dispatchMarks(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
