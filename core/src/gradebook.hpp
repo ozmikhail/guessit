@@ -1,4 +1,5 @@
 #pragma once
+#include "grades.hpp"
 #include "student.hpp"
 #include <map>
 #include <string>
@@ -31,7 +32,15 @@ public:
     double maxTotal() const;
     double percentFor(const std::string& id) const;
 
+    const std::string& letterFor(const std::string& id) const;
+    double gpaFor(const std::string& id) const;
+    const std::string& letterInSubject(const std::string& id, const std::string& subjectName) const;
+
+    GradeScale& scale() { return m_scale; }
+    const GradeScale& scale() const { return m_scale; }
+
 private:
     std::map<std::string, Subject> m_subjects;
     std::map<std::string, Student> m_students;
+    GradeScale m_scale;
 };

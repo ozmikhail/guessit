@@ -109,3 +109,33 @@ double Gradebook::percentFor(const std::string& id) const {
     if (mx <= 0.0) return 0.0;
     return totalFor(id) / mx * 100.0;
 }
+
+const std::string& Gradebook::letterFor(const std::string& id) const {
+    return m_scale.letterFor(percentFor(id));
+}
+
+double Gradebook::gpaFor(const std::string& id) const {
+    const Student& s = student(id);
+    if (m_subjects.empty()) return 0.0;
+    double sum = 0.0;
+    std::size_t n = 0;
+    for (const auto& [name, sub] : m_subjects) {
+        auto it = s.marks.find(name);
+        double pct = (it == s.marks.end())
+            ? 0.0
+            : (sub.maxMarks > 0.0 ? it->second / sub.maxMarks * 100.0 : 0.0);
+        sum += m_scale.gpaFor(pct);
+        ++n;
+    }
+    return n == 0 ? 0.0 : sum / static_cast<double>(n);
+}
+
+const std::string& Gradebook::letterInSubject(const std::string& id, const std::string& subjectName) const {
+    static const std::string none = "-";
+    const Student& s = student(id);
+    const Subject& sub = subject(subjectName);
+    auto it = s.marks.find(subjectName);
+    if (it == s.marks.end()) return none;
+    double pct = sub.maxMarks > 0.0 ? it->second / sub.maxMarks * 100.0 : 0.0;
+    return m_scale.letterFor(pct);
+}
