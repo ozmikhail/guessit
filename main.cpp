@@ -39,6 +39,10 @@ static void printHelp() {
         "  unmark <id> <subject>\n"
         "  marks <id>                          show all marks for a student\n"
         "  marks <id> <s1=score> [s2=...]      bulk record marks\n"
+        "  grades show\n"
+        "  grades set <letter> <minPct> [gpa=G]\n"
+        "  grades remove <letter>\n"
+        "  grades reset\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -224,6 +228,68 @@ static bool dispatchMarks(Gradebook& book, const std::vector<std::string>& token
     return true;
 }
 
+static void cmdGradesShow(const Gradebook& book) {
+    const auto& bands = book.scale().bands();
+    std::cout << "  letter   minPct   gpa\n";
+    for (const auto& b : bands)
+        std::cout << "  " << std::left << std::setw(6) << b.letter
+                  << "   " << std::setw(6) << b.minPct
+                  << "   " << b.gpa << '\n';
+}
+
+static void cmdGradesSet(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() < 2)
+        throw GradeError("usage: grades set <letter> <minPct> [gpa=G]");
+    const std::string& letter = args[0];
+    double minPct = 0.0;
+    try { minPct = std::stod(args[1]); }
+    catch (...) { throw GradeError("invalid minPct '" + args[1] + "'"); }
+
+    double gpa = 0.0;
+    bool gpaSet = false;
+    for (const auto& b : book.scale().bands())
+        if (b.letter == letter) { gpa = b.gpa; gpaSet = true; break; }
+
+    for (std::size_t i = 2; i < args.size(); ++i) {
+        std::string key;
+        double val = 0.0;
+        if (!parseKv(args[i], key, val))
+            throw GradeError("expected key=value, got '" + args[i] + "'");
+        if (key == "gpa") { gpa = val; gpaSet = true; }
+        else throw GradeError("unknown grade option '" + key + "'");
+    }
+    if (!gpaSet) gpa = 0.0;
+
+    book.scale().set(letter, minPct, gpa);
+    std::cout << "set grade " << letter << " >= " << minPct << "% (gpa " << gpa << ")\n";
+}
+
+static void cmdGradesRemove(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() != 1)
+        throw GradeError("usage: grades remove <letter>");
+    book.scale().remove(args[0]);
+    std::cout << "removed grade " << args[0] << '\n';
+}
+
+static void cmdGradesReset(Gradebook& book) {
+    book.scale().reset();
+    std::cout << "grade scale reset to default\n";
+}
+
+static bool dispatchGrades(Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "grades") return false;
+    if (tokens.size() < 2)
+        throw GradeError("usage: grades <show|set|remove|reset> ...");
+    std::vector<std::string> args(tokens.begin() + 2, tokens.end());
+    const std::string& sub = tokens[1];
+    if (sub == "show") cmdGradesShow(book);
+    else if (sub == "set") cmdGradesSet(book, args);
+    else if (sub == "remove") cmdGradesRemove(book, args);
+    else if (sub == "reset") cmdGradesReset(book);
+    else throw GradeError("unknown grades subcommand '" + sub + "'");
+    return true;
+}
+
 static bool dispatchMark(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty()) return false;
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
@@ -273,6 +339,7 @@ int main() {
             if (dispatchStudent(book, tokens)) continue;
             if (dispatchMark(book, tokens)) continue;
             if (dispatchMarks(book, tokens)) continue;
+            if (dispatchGrades(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
