@@ -6,6 +6,7 @@
 #include <vector>
 #include "error.hpp"
 #include "gradebook.hpp"
+#include "ranking.hpp"
 
 static std::vector<std::string> tokenize(const std::string& s) {
     std::vector<std::string> out;
@@ -44,6 +45,9 @@ static void printHelp() {
         "  grades remove <letter>\n"
         "  grades reset\n"
         "  report <id>                         per-subject letters, total, GPA\n"
+        "  rank                                full ranked list\n"
+        "  top <N>                             top N by percent\n"
+        "  bottom <N>                          bottom N by percent\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -328,6 +332,66 @@ static bool dispatchReport(const Gradebook& book, const std::vector<std::string>
     return true;
 }
 
+static void printRankRows(const std::vector<RankRow>& rows) {
+    if (rows.empty()) {
+        std::cout << "(no students)\n";
+        return;
+    }
+    std::size_t wid = 2, wname = 4;
+    for (const auto& r : rows) {
+        wid = std::max(wid, r.id.size());
+        wname = std::max(wname, r.name.size());
+    }
+    std::cout << "  " << std::left << std::setw(4) << "rank"
+              << "  " << std::setw(static_cast<int>(wid)) << "id"
+              << "  " << std::setw(static_cast<int>(wname)) << "name"
+              << "    total      %     grade   gpa\n";
+    for (const auto& r : rows) {
+        std::cout << "  " << std::left << std::setw(4) << r.rank
+                  << "  " << std::setw(static_cast<int>(wid)) << r.id
+                  << "  " << std::setw(static_cast<int>(wname)) << r.name
+                  << "  " << std::right << std::setw(4) << fmtScore(r.total)
+                  << " / " << std::setw(4) << fmtScore(r.maxTotal)
+                  << "  " << std::fixed << std::setprecision(2) << std::setw(6) << r.percent << "%"
+                  << "    " << std::left << std::setw(2) << r.letter
+                  << "    " << std::setprecision(2) << r.gpa << '\n';
+    }
+    std::cout.unsetf(std::ios::fixed);
+    std::cout << std::left;
+}
+
+static std::size_t parseCount(const std::vector<std::string>& args, const std::string& usage) {
+    if (args.size() != 1) throw GradeError(usage);
+    long n = 0;
+    try { n = std::stol(args[0]); }
+    catch (...) { throw GradeError("invalid count '" + args[0] + "'"); }
+    if (n <= 0) throw GradeError("count must be positive");
+    return static_cast<std::size_t>(n);
+}
+
+static bool dispatchRank(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty()) return false;
+    const std::string& v = tokens[0];
+    if (v != "rank" && v != "top" && v != "bottom") return false;
+    auto rows = rankList(book);
+    std::vector<std::string> args(tokens.begin() + 1, tokens.end());
+    if (v == "rank") {
+        if (!args.empty()) throw GradeError("usage: rank");
+        printRankRows(rows);
+    } else if (v == "top") {
+        std::size_t n = parseCount(args, "usage: top <N>");
+        if (n > rows.size()) n = rows.size();
+        rows.resize(n);
+        printRankRows(rows);
+    } else {
+        std::size_t n = parseCount(args, "usage: bottom <N>");
+        if (n > rows.size()) n = rows.size();
+        rows.erase(rows.begin(), rows.end() - static_cast<long>(n));
+        printRankRows(rows);
+    }
+    return true;
+}
+
 static bool dispatchMark(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty()) return false;
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
@@ -379,6 +443,7 @@ int main() {
             if (dispatchMarks(book, tokens)) continue;
             if (dispatchGrades(book, tokens)) continue;
             if (dispatchReport(book, tokens)) continue;
+            if (dispatchRank(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
