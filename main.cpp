@@ -7,6 +7,7 @@
 #include "error.hpp"
 #include "gradebook.hpp"
 #include "ranking.hpp"
+#include "stats.hpp"
 
 static std::vector<std::string> tokenize(const std::string& s) {
     std::vector<std::string> out;
@@ -48,6 +49,10 @@ static void printHelp() {
         "  rank                                full ranked list\n"
         "  top <N>                             top N by percent\n"
         "  bottom <N>                          bottom N by percent\n"
+        "  stats                               class statistics\n"
+        "  stats <subject>                     per-subject statistics\n"
+        "  topper <subject>                    best student in subject\n"
+        "  histogram                           ascii grade distribution\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -392,6 +397,82 @@ static bool dispatchRank(const Gradebook& book, const std::vector<std::string>& 
     return true;
 }
 
+static void cmdStatsClass(const Gradebook& book) {
+    auto s = classStats(book);
+    if (s.count == 0) { std::cout << "(no students)\n"; return; }
+    std::cout << std::fixed << std::setprecision(2)
+              << "  count       " << s.count << '\n'
+              << "  mean %      " << s.meanPct << '\n'
+              << "  median %    " << s.medianPct << '\n'
+              << "  stddev %    " << s.stddevPct << '\n'
+              << "  min %       " << s.minPct << "  (" << s.bottomId << ")\n"
+              << "  max %       " << s.maxPct << "  (" << s.topId << ")\n"
+              << "  pass rate   " << s.passRate << "%\n";
+    std::cout.unsetf(std::ios::fixed);
+}
+
+static void cmdStatsSubject(const Gradebook& book, const std::string& name) {
+    auto s = subjectStats(book, name);
+    if (s.count == 0) { std::cout << "(no marks recorded for " << name << ")\n"; return; }
+    std::cout << std::fixed << std::setprecision(2)
+              << "  subject     " << name << "  (max=" << s.maxMarks
+              << "  pass=" << s.passMark << ")\n"
+              << "  count       " << s.count << '\n'
+              << "  mean        " << s.mean << '\n'
+              << "  median      " << s.median << '\n'
+              << "  stddev      " << s.stddev << '\n'
+              << "  min         " << s.min << '\n'
+              << "  max         " << s.max << '\n'
+              << "  pass rate   " << s.passRate << "%\n";
+    std::cout.unsetf(std::ios::fixed);
+}
+
+static bool dispatchStats(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "stats") return false;
+    if (tokens.size() == 1) cmdStatsClass(book);
+    else if (tokens.size() == 2) cmdStatsSubject(book, tokens[1]);
+    else throw GradeError("usage: stats [<subject>]");
+    return true;
+}
+
+static bool dispatchTopper(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "topper") return false;
+    if (tokens.size() != 2) throw GradeError("usage: topper <subject>");
+    std::string id = topperOf(book, tokens[1]);
+    if (id.empty()) {
+        std::cout << "(no marks recorded for " << tokens[1] << ")\n";
+    } else {
+        const Student& s = book.student(id);
+        double score = s.marks.at(tokens[1]);
+        std::cout << "topper of " << tokens[1] << ": " << id << " " << s.name
+                  << "  (" << fmtScore(score) << "/"
+                  << fmtScore(book.subject(tokens[1]).maxMarks) << ")\n";
+    }
+    return true;
+}
+
+static bool dispatchHistogram(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "histogram") return false;
+    if (tokens.size() != 1) throw GradeError("usage: histogram");
+    auto rows = gradeHistogram(book);
+    std::size_t total = 0;
+    std::size_t peak = 0;
+    for (const auto& [_, n] : rows) {
+        total += n;
+        if (n > peak) peak = n;
+    }
+    if (total == 0) { std::cout << "(no students)\n"; return true; }
+    const std::size_t barMax = 30;
+    for (const auto& [letter, n] : rows) {
+        std::size_t bar = peak == 0 ? 0 : (n * barMax + peak - 1) / peak;
+        std::cout << "  " << std::left << std::setw(3) << letter
+                  << " " << std::right << std::setw(3) << n << "  "
+                  << std::string(bar, '#') << '\n';
+    }
+    std::cout << std::left;
+    return true;
+}
+
 static bool dispatchMark(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty()) return false;
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
@@ -444,6 +525,9 @@ int main() {
             if (dispatchGrades(book, tokens)) continue;
             if (dispatchReport(book, tokens)) continue;
             if (dispatchRank(book, tokens)) continue;
+            if (dispatchStats(book, tokens)) continue;
+            if (dispatchTopper(book, tokens)) continue;
+            if (dispatchHistogram(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
