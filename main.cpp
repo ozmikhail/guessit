@@ -1,3 +1,4 @@
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -53,6 +54,7 @@ static void printHelp() {
         "  stats <subject>                     per-subject statistics\n"
         "  topper <subject>                    best student in subject\n"
         "  histogram                           ascii grade distribution\n"
+        "  find <substring>                    fuzzy id/name match\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -473,6 +475,29 @@ static bool dispatchHistogram(const Gradebook& book, const std::vector<std::stri
     return true;
 }
 
+static std::string toLower(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static bool dispatchFind(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "find") return false;
+    if (tokens.size() < 2) throw GradeError("usage: find <substring>");
+    std::string needle = toLower(joinFrom(tokens, 1));
+    auto rows = rankList(book);
+    std::vector<RankRow> hits;
+    for (const auto& r : rows)
+        if (toLower(r.id).find(needle) != std::string::npos
+            || toLower(r.name).find(needle) != std::string::npos)
+            hits.push_back(r);
+    if (hits.empty()) {
+        std::cout << "(no matches for '" << joinFrom(tokens, 1) << "')\n";
+    } else {
+        printRankRows(hits);
+    }
+    return true;
+}
+
 static bool dispatchMark(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty()) return false;
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
@@ -528,6 +553,7 @@ int main() {
             if (dispatchStats(book, tokens)) continue;
             if (dispatchTopper(book, tokens)) continue;
             if (dispatchHistogram(book, tokens)) continue;
+            if (dispatchFind(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
