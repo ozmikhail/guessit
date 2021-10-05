@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <iomanip>
@@ -55,6 +56,7 @@ static void printHelp() {
         "  topper <subject>                    best student in subject\n"
         "  histogram                           ascii grade distribution\n"
         "  find <substring>                    fuzzy id/name match\n"
+        "  sort <key> [asc|desc]               key: name id total percent gpa\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -480,6 +482,33 @@ static std::string toLower(std::string s) {
     return s;
 }
 
+static bool dispatchSort(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "sort") return false;
+    if (tokens.size() < 2 || tokens.size() > 3)
+        throw GradeError("usage: sort <key> [asc|desc]");
+    const std::string& key = tokens[1];
+
+    bool asc = (key == "name" || key == "id");
+    if (tokens.size() == 3) {
+        if (tokens[2] == "asc") asc = true;
+        else if (tokens[2] == "desc") asc = false;
+        else throw GradeError("expected asc or desc, got '" + tokens[2] + "'");
+    }
+
+    auto rows = rankList(book);
+    auto cmp = [&](const RankRow& a, const RankRow& b) {
+        if (key == "name") return asc ? a.name < b.name : a.name > b.name;
+        else if (key == "id") return asc ? a.id < b.id : a.id > b.id;
+        else if (key == "total") return asc ? a.total < b.total : a.total > b.total;
+        else if (key == "percent") return asc ? a.percent < b.percent : a.percent > b.percent;
+        else if (key == "gpa") return asc ? a.gpa < b.gpa : a.gpa > b.gpa;
+        throw GradeError("unknown sort key '" + key + "'");
+    };
+    std::sort(rows.begin(), rows.end(), cmp);
+    printRankRows(rows);
+    return true;
+}
+
 static bool dispatchFind(const Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "find") return false;
     if (tokens.size() < 2) throw GradeError("usage: find <substring>");
@@ -554,6 +583,7 @@ int main() {
             if (dispatchTopper(book, tokens)) continue;
             if (dispatchHistogram(book, tokens)) continue;
             if (dispatchFind(book, tokens)) continue;
+            if (dispatchSort(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
