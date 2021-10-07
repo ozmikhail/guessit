@@ -57,6 +57,10 @@ static void printHelp() {
         "  histogram                           ascii grade distribution\n"
         "  find <substring>                    fuzzy id/name match\n"
         "  sort <key> [asc|desc]               key: name id total percent gpa\n"
+        "  filter grade <letter>\n"
+        "  filter passed | filter failed\n"
+        "  filter percent <op> <value>         op: >= > <= < ==\n"
+        "  filter score <subject> <op> <value>\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -509,6 +513,60 @@ static bool dispatchSort(const Gradebook& book, const std::vector<std::string>& 
     return true;
 }
 
+static bool applyOp(const std::string& op, double a, double b) {
+    if (op == ">=") return a >= b;
+    if (op == ">") return a > b;
+    if (op == "<=") return a <= b;
+    if (op == "<") return a < b;
+    if (op == "==") return a == b;
+    throw GradeError("unknown comparison op '" + op + "'");
+}
+
+static double parseNumber(const std::string& s) {
+    try { return std::stod(s); }
+    catch (...) { throw GradeError("invalid number '" + s + "'"); }
+}
+
+static bool dispatchFilter(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "filter") return false;
+    if (tokens.size() < 2) throw GradeError("usage: filter <grade|passed|failed|percent|score> ...");
+
+    auto rows = rankList(book);
+    std::vector<RankRow> hits;
+    const std::string& which = tokens[1];
+
+    if (which == "grade") {
+        if (tokens.size() != 3) throw GradeError("usage: filter grade <letter>");
+        for (const auto& r : rows) if (r.letter == tokens[2]) hits.push_back(r);
+    } else if (which == "passed" || which == "failed") {
+        if (tokens.size() != 2) throw GradeError("usage: filter " + which);
+        bool wantPassed = (which == "passed");
+        for (const auto& r : rows)
+            if (studentPasses(book, r.id) == wantPassed) hits.push_back(r);
+    } else if (which == "percent") {
+        if (tokens.size() != 4) throw GradeError("usage: filter percent <op> <value>");
+        double v = parseNumber(tokens[3]);
+        for (const auto& r : rows) if (applyOp(tokens[2], r.percent, v)) hits.push_back(r);
+    } else if (which == "score") {
+        if (tokens.size() != 5) throw GradeError("usage: filter score <subject> <op> <value>");
+        const std::string& sname = tokens[2];
+        book.subject(sname);
+        double v = parseNumber(tokens[4]);
+        for (const auto& r : rows) {
+            const auto& m = book.student(r.id).marks;
+            auto it = m.find(sname);
+            if (it == m.end()) continue;
+            if (applyOp(tokens[3], it->second, v)) hits.push_back(r);
+        }
+    } else {
+        throw GradeError("unknown filter kind '" + which + "'");
+    }
+
+    if (hits.empty()) std::cout << "(no matches)\n";
+    else printRankRows(hits);
+    return true;
+}
+
 static bool dispatchFind(const Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "find") return false;
     if (tokens.size() < 2) throw GradeError("usage: find <substring>");
@@ -584,6 +642,7 @@ int main() {
             if (dispatchHistogram(book, tokens)) continue;
             if (dispatchFind(book, tokens)) continue;
             if (dispatchSort(book, tokens)) continue;
+            if (dispatchFilter(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
