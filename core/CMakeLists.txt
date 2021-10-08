@@ -1,5 +1,6 @@
 add_library(guessit_core
     src/gradebook.cpp
+    src/gradebook_io.cpp
     src/grades.cpp
     src/ranking.cpp
     src/stats.cpp
