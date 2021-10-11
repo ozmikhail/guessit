@@ -8,6 +8,7 @@
 #include <vector>
 #include "error.hpp"
 #include "gradebook.hpp"
+#include "gradebook_io.hpp"
 #include "ranking.hpp"
 #include "stats.hpp"
 
@@ -61,6 +62,8 @@ static void printHelp() {
         "  filter passed | filter failed\n"
         "  filter percent <op> <value>         op: >= > <= < ==\n"
         "  filter score <subject> <op> <value>\n"
+        "  save <file>        write the gradebook to file\n"
+        "  load <file>        merge directives from file\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -527,6 +530,27 @@ static double parseNumber(const std::string& s) {
     catch (...) { throw GradeError("invalid number '" + s + "'"); }
 }
 
+static bool dispatchSave(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "save") return false;
+    if (tokens.size() < 2) throw GradeError("usage: save <file>");
+    std::string path = joinFrom(tokens, 1);
+    saveGradebook(book, path);
+    std::cout << "saved " << book.subjects().size() << " subject(s), "
+              << book.students().size() << " student(s) to " << path << '\n';
+    return true;
+}
+
+static bool dispatchLoad(Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "load") return false;
+    if (tokens.size() < 2) throw GradeError("usage: load <file>");
+    std::string path = joinFrom(tokens, 1);
+    auto rep = loadGradebook(book, path, std::cerr);
+    std::cout << "loaded " << rep.directives << " directive(s) from " << path;
+    if (rep.errors) std::cout << "  (" << rep.errors << " error(s))";
+    std::cout << '\n';
+    return true;
+}
+
 static bool dispatchFilter(const Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "filter") return false;
     if (tokens.size() < 2) throw GradeError("usage: filter <grade|passed|failed|percent|score> ...");
@@ -643,6 +667,8 @@ int main() {
             if (dispatchFind(book, tokens)) continue;
             if (dispatchSort(book, tokens)) continue;
             if (dispatchFilter(book, tokens)) continue;
+            if (dispatchSave(book, tokens)) continue;
+            if (dispatchLoad(book, tokens)) continue;
             std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
