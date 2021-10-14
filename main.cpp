@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -11,6 +13,11 @@
 #include "gradebook_io.hpp"
 #include "ranking.hpp"
 #include "stats.hpp"
+
+#ifdef HAVE_READLINE
+#include <readline/readline.h>
+#include <readline/history.h>
+#endif
 
 static std::vector<std::string> tokenize(const std::string& s) {
     std::vector<std::string> out;
@@ -64,6 +71,9 @@ static void printHelp() {
         "  filter score <subject> <op> <value>\n"
         "  save <file>        write the gradebook to file\n"
         "  load <file>        merge directives from file\n"
+        "  history            list previously entered commands\n"
+        "  !N                 re-run history entry N (1-based)\n"
+        "  !!                 re-run the most recent command\n"
         "  help               show this message\n"
         "  clear              empty the gradebook\n"
         "  quit / exit        exit\n\n";
@@ -631,45 +641,103 @@ static bool dispatchSubject(Gradebook& book, const std::vector<std::string>& tok
     return true;
 }
 
+static bool readLine(std::string& line) {
+#ifdef HAVE_READLINE
+    char* raw = readline("> ");
+    if (!raw) return false;
+    line = raw;
+    if (!line.empty()) add_history(raw);
+    free(raw);
+    return true;
+#else
+    std::cout << "> " << std::flush;
+    return static_cast<bool>(std::getline(std::cin, line));
+#endif
+}
+
+static bool resolveBang(std::string& line, const std::vector<std::string>& history) {
+    if (line.size() < 2 || line[0] != '!') return true;
+    std::size_t idx = 0;
+    if (line == "!!") {
+        if (history.empty()) { std::cerr << "no history yet\n"; return false; }
+        idx = history.size();
+    } else {
+        try {
+            std::size_t consumed = 0;
+            long n = std::stol(line.substr(1), &consumed);
+            if (consumed + 1 != line.size() || n < 1) {
+                std::cerr << "usage: !N or !!  (N is a 1-based history index)\n";
+                return false;
+            }
+            idx = static_cast<std::size_t>(n);
+        } catch (...) {
+            std::cerr << "usage: !N or !!  (N is a 1-based history index)\n";
+            return false;
+        }
+    }
+    if (idx > history.size()) {
+        std::cerr << "no history entry " << idx << " (have " << history.size() << ")\n";
+        return false;
+    }
+    line = history[idx - 1];
+    std::cout << line << '\n';
+    return true;
+}
+
 int main() {
     Gradebook book;
+    std::vector<std::string> history;
+
+#ifdef HAVE_READLINE
+    using_history();
+#endif
 
     std::cout << "guessit — type 'help' for commands or 'quit' to exit\n";
 
     while (true) {
-        std::cout << "> " << std::flush;
         std::string line;
-        if (!std::getline(std::cin, line)) break;
+        if (!readLine(line)) break;
 
         if (line.empty()) continue;
         if (line == "quit" || line == "exit") break;
-        if (line == "help") { printHelp(); continue; }
+
+        if (line.size() >= 2 && line[0] == '!') {
+            if (!resolveBang(line, history)) continue;
+        }
+
+        if (line == "help") { printHelp(); history.push_back(line); continue; }
+
+        if (line == "history") {
+            if (history.empty()) std::cout << "(no history)\n";
+            else for (std::size_t i = 0; i < history.size(); ++i)
+                std::cout << "[" << i + 1 << "] " << history[i] << '\n';
+            continue;
+        }
 
         if (line == "clear") {
             book.subjects().clear();
             book.students().clear();
             std::cout << "gradebook cleared\n";
+            history.push_back(line);
             continue;
         }
 
         try {
             auto tokens = tokenize(line);
-            if (dispatchSubject(book, tokens)) continue;
-            if (dispatchStudent(book, tokens)) continue;
-            if (dispatchMark(book, tokens)) continue;
-            if (dispatchMarks(book, tokens)) continue;
-            if (dispatchGrades(book, tokens)) continue;
-            if (dispatchReport(book, tokens)) continue;
-            if (dispatchRank(book, tokens)) continue;
-            if (dispatchStats(book, tokens)) continue;
-            if (dispatchTopper(book, tokens)) continue;
-            if (dispatchHistogram(book, tokens)) continue;
-            if (dispatchFind(book, tokens)) continue;
-            if (dispatchSort(book, tokens)) continue;
-            if (dispatchFilter(book, tokens)) continue;
-            if (dispatchSave(book, tokens)) continue;
-            if (dispatchLoad(book, tokens)) continue;
-            std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
+            bool handled =
+                dispatchSubject(book, tokens) || dispatchStudent(book, tokens) ||
+                dispatchMark(book, tokens) || dispatchMarks(book, tokens) ||
+                dispatchGrades(book, tokens) || dispatchReport(book, tokens) ||
+                dispatchRank(book, tokens) || dispatchStats(book, tokens) ||
+                dispatchTopper(book, tokens) || dispatchHistogram(book, tokens)||
+                dispatchFind(book, tokens) || dispatchSort(book, tokens) ||
+                dispatchFilter(book, tokens) || dispatchSave(book, tokens) ||
+                dispatchLoad(book, tokens);
+            if (!handled) {
+                std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
+                continue;
+            }
+            history.push_back(line);
         } catch (const std::exception& ex) {
             std::cerr << "error: " << ex.what() << '\n';
         }
