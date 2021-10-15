@@ -19,6 +19,52 @@
 #include <readline/history.h>
 #endif
 
+static const std::vector<std::string> COMPLETIONS = {
+    "subject", "student", "mark", "unmark", "marks", "grades", "report",
+    "rank", "top", "bottom", "stats", "topper", "histogram",
+    "find", "sort", "filter", "save", "load",
+    "history", "help", "clear", "quit", "exit",
+    "add", "list", "remove", "rename", "show", "set", "reset",
+    "asc", "desc",
+    "passed", "failed", "grade", "percent", "score",
+    "name", "id", "total", "gpa",
+};
+
+static const Gradebook* g_book = nullptr;
+
+#ifdef HAVE_READLINE
+static char* completionGen(const char* text, int state) {
+    static std::vector<std::string> matches;
+    static int idx;
+    if (state == 0) {
+        matches.clear();
+        idx = 0;
+        std::string pfx(text);
+        for (const auto& s : COMPLETIONS)
+            if (s.compare(0, pfx.size(), pfx) == 0) matches.push_back(s);
+        if (g_book) {
+            for (const auto& [name, _] : g_book->subjects())
+                if (name.compare(0, pfx.size(), pfx) == 0) matches.push_back(name);
+            for (const auto& [id, _] : g_book->students())
+                if (id.compare(0, pfx.size(), pfx) == 0) matches.push_back(id);
+            for (const auto& b : g_book->scale().bands())
+                if (b.letter.compare(0, pfx.size(), pfx) == 0) matches.push_back(b.letter);
+        }
+        std::sort(matches.begin(), matches.end());
+        matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
+    }
+    if (idx < static_cast<int>(matches.size()))
+        return strdup(matches[idx++].c_str());
+    return nullptr;
+}
+
+static char** completionCb(const char* text, int /*start*/, int /*end*/) {
+    rl_attempted_completion_over = 1;
+    rl_completion_append_character = ' ';
+    return rl_completion_matches(text, completionGen);
+}
+#endif
+
 static std::vector<std::string> tokenize(const std::string& s) {
     std::vector<std::string> out;
     std::istringstream iss(s);
@@ -687,8 +733,10 @@ static bool resolveBang(std::string& line, const std::vector<std::string>& histo
 int main() {
     Gradebook book;
     std::vector<std::string> history;
+    g_book = &book;
 
 #ifdef HAVE_READLINE
+    rl_attempted_completion_function = completionCb;
     using_history();
 #endif
 
