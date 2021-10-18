@@ -105,9 +105,16 @@ double Gradebook::maxTotal() const {
 }
 
 double Gradebook::percentFor(const std::string& id) const {
-    double mx = maxTotal();
-    if (mx <= 0.0) return 0.0;
-    return totalFor(id) / mx * 100.0;
+    const Student& s = student(id);
+    double weighted = 0.0, totalWeight = 0.0;
+    for (const auto& [name, sub] : m_subjects) {
+        if (sub.maxMarks <= 0.0 || sub.weight <= 0.0) continue;
+        auto it = s.marks.find(name);
+        double pct = (it == s.marks.end()) ? 0.0 : it->second / sub.maxMarks * 100.0;
+        weighted += pct * sub.weight;
+        totalWeight += sub.weight;
+    }
+    return totalWeight > 0.0 ? weighted / totalWeight : 0.0;
 }
 
 const std::string& Gradebook::letterFor(const std::string& id) const {
@@ -116,18 +123,17 @@ const std::string& Gradebook::letterFor(const std::string& id) const {
 
 double Gradebook::gpaFor(const std::string& id) const {
     const Student& s = student(id);
-    if (m_subjects.empty()) return 0.0;
-    double sum = 0.0;
-    std::size_t n = 0;
+    double weighted = 0.0, totalWeight = 0.0;
     for (const auto& [name, sub] : m_subjects) {
+        if (sub.weight <= 0.0) continue;
         auto it = s.marks.find(name);
         double pct = (it == s.marks.end())
             ? 0.0
             : (sub.maxMarks > 0.0 ? it->second / sub.maxMarks * 100.0 : 0.0);
-        sum += m_scale.gpaFor(pct);
-        ++n;
+        weighted += m_scale.gpaFor(pct) * sub.weight;
+        totalWeight += sub.weight;
     }
-    return n == 0 ? 0.0 : sum / static_cast<double>(n);
+    return totalWeight > 0.0 ? weighted / totalWeight : 0.0;
 }
 
 const std::string& Gradebook::letterInSubject(const std::string& id, const std::string& subjectName) const {
