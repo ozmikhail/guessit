@@ -1,5 +1,6 @@
 #include "gradebook.hpp"
 #include "error.hpp"
+#include <algorithm>
 
 bool Gradebook::hasSubject(const std::string& name) const {
     return m_subjects.find(name) != m_subjects.end();
@@ -58,6 +59,27 @@ void Gradebook::renameStudent(const std::string& id, const std::string& newName)
     if (it == m_students.end())
         throw GradeError("no student '" + id + "'");
     it->second.name = newName;
+}
+
+void Gradebook::setSection(const std::string& id, const std::string& section) {
+    student(id).section = section;
+}
+
+void Gradebook::setAttendance(const std::string& id, double percent) {
+    if (percent < 0.0 || percent > 100.0)
+        throw GradeError("attendance must be in [0, 100]");
+    student(id).attendance = percent;
+}
+
+std::vector<std::string> Gradebook::sections() const {
+    std::vector<std::string> out;
+    for (const auto& [id, st] : m_students) {
+        if (st.section.empty()) continue;
+        if (std::find(out.begin(), out.end(), st.section) == out.end())
+            out.push_back(st.section);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 const Student& Gradebook::student(const std::string& id) const {

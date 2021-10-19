@@ -3,6 +3,7 @@
 #include "student.hpp"
 #include <map>
 #include <string>
+#include <vector>
 
 class Gradebook {
 public:
@@ -22,8 +23,12 @@ public:
     void addStudent(Student s);
     void removeStudent(const std::string& id);
     void renameStudent(const std::string& id, const std::string& newName);
+    void setSection(const std::string& id, const std::string& section);
+    void setAttendance(const std::string& id, double percent);
     const Student& student(const std::string& id) const;
     Student& student(const std::string& id);
+
+    std::vector<std::string> sections() const;
 
     void setMark(const std::string& id, const std::string& subjectName, double score);
     void clearMark(const std::string& id, const std::string& subjectName);

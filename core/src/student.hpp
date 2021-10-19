@@ -12,5 +12,7 @@ struct Subject {
 struct Student {
     std::string id;
     std::string name;
+    std::string section;
+    double attendance{100.0};
     std::map<std::string, double> marks;
 };
