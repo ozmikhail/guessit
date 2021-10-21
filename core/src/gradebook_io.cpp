@@ -21,6 +21,12 @@ void saveGradebook(const Gradebook& book, const std::string& path) {
             << fmtNum(sub.weight) << ' ' << fmtNum(sub.passMark) << '\n';
     for (const auto& [id, st] : book.students())
         out << "STUDENT " << id << ' ' << st.name << '\n';
+    for (const auto& [id, st] : book.students()) {
+        if (!st.section.empty())
+            out << "SECTION " << id << ' ' << st.section << '\n';
+        if (st.attendance != 100.0)
+            out << "ATTEND " << id << ' ' << fmtNum(st.attendance) << '\n';
+    }
     for (const auto& [id, st] : book.students())
         for (const auto& [name, score] : st.marks)
             out << "MARK " << id << ' ' << name << ' ' << fmtNum(score) << '\n';
@@ -81,6 +87,12 @@ LoadReport loadGradebook(Gradebook& book, const std::string& path, std::ostream&
             } else if (kind == "MARK") {
                 if (toks.size() != 4) throw GradeError("usage: MARK <id> <subject> <score>");
                 book.setMark(toks[1], toks[2], parseNum(toks[3], "score"));
+            } else if (kind == "SECTION") {
+                if (toks.size() != 3) throw GradeError("usage: SECTION <id> <name>");
+                book.setSection(toks[1], toks[2]);
+            } else if (kind == "ATTEND") {
+                if (toks.size() != 3) throw GradeError("usage: ATTEND <id> <pct>");
+                book.setAttendance(toks[1], parseNum(toks[2], "attendance"));
             } else {
                 throw GradeError("unknown directive '" + kind + "'");
             }
