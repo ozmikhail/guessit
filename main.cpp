@@ -93,6 +93,8 @@ static void printHelp() {
         "  student list\n"
         "  student remove <id>\n"
         "  student rename <id> <new name...>\n"
+        "  student section <id> [name]         assign or clear section\n"
+        "  student attend <id> <percent>       set attendance percentage\n"
         "  mark <id> <subject> <score>\n"
         "  unmark <id> <subject>\n"
         "  marks <id>                          show all marks for a student\n"
@@ -217,6 +219,26 @@ static void cmdStudentRename(Gradebook& book, const std::vector<std::string>& ar
     std::cout << "renamed " << args[0] << " to " << joinFrom(args, 1) << '\n';
 }
 
+static void cmdStudentSection(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.empty() || args.size() > 2)
+        throw GradeError("usage: student section <id> [name]");
+    std::string section = args.size() == 2 ? args[1] : std::string{};
+    book.setSection(args[0], section);
+    if (section.empty())
+        std::cout << "cleared section for " << args[0] << '\n';
+    else
+        std::cout << "set " << args[0] << " section " << section << '\n';
+}
+
+static void cmdStudentAttend(Gradebook& book, const std::vector<std::string>& args) {
+    if (args.size() != 2) throw GradeError("usage: student attend <id> <percent>");
+    double pct = 0.0;
+    try { pct = std::stod(args[1]); }
+    catch (...) { throw GradeError("invalid percent '" + args[1] + "'"); }
+    book.setAttendance(args[0], pct);
+    std::cout << "set " << args[0] << " attendance " << pct << "%\n";
+}
+
 static bool dispatchStudent(Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "student") return false;
     if (tokens.size() < 2)
@@ -227,6 +249,8 @@ static bool dispatchStudent(Gradebook& book, const std::vector<std::string>& tok
     else if (sub == "list") cmdStudentList(book);
     else if (sub == "remove") cmdStudentRemove(book, args);
     else if (sub == "rename") cmdStudentRename(book, args);
+    else if (sub == "section") cmdStudentSection(book, args);
+    else if (sub == "attend") cmdStudentAttend(book, args);
     else throw GradeError("unknown student subcommand '" + sub + "'");
     return true;
 }
@@ -394,6 +418,9 @@ static void cmdReport(const Gradebook& book, const std::vector<std::string>& arg
               << "  (" << std::fixed << std::setprecision(2) << book.percentFor(id) << "%)"
               << "  grade " << book.letterFor(id)
               << "  gpa " << std::setprecision(2) << book.gpaFor(id) << '\n';
+    if (!s.section.empty() || s.attendance != 100.0)
+        std::cout << "  section " << (s.section.empty() ? "-" : s.section)
+                  << "  attendance " << std::setprecision(2) << s.attendance << "%\n";
     std::cout.unsetf(std::ios::fixed);
 }
 
