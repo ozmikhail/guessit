@@ -105,8 +105,10 @@ static void printHelp() {
         "  grades reset\n"
         "  report <id>                         per-subject letters, total, GPA\n"
         "  rank                                full ranked list\n"
+        "  rank section <name>                 rank within section\n"
         "  top <N>                             top N by percent\n"
         "  bottom <N>                          bottom N by percent\n"
+        "  section list                        sections in use with counts\n"
         "  stats                               class statistics\n"
         "  stats <subject>                     per-subject statistics\n"
         "  topper <subject>                    best student in subject\n"
@@ -117,6 +119,7 @@ static void printHelp() {
         "  filter passed | filter failed\n"
         "  filter percent <op> <value>         op: >= > <= < ==\n"
         "  filter score <subject> <op> <value>\n"
+        "  filter section <name>\n"
         "  save <file>        write the gradebook to file\n"
         "  load <file>        merge directives from file\n"
         "  history            list previously entered commands\n"
@@ -468,6 +471,16 @@ static std::size_t parseCount(const std::vector<std::string>& args, const std::s
     return static_cast<std::size_t>(n);
 }
 
+static void rerank(std::vector<RankRow>& rows) {
+    std::size_t r = 0;
+    double prev = -1.0;
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        if (i == 0 || rows[i].percent != prev) r = i + 1;
+        rows[i].rank = r;
+        prev = rows[i].percent;
+    }
+}
+
 static bool dispatchRank(const Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty()) return false;
     const std::string& v = tokens[0];
@@ -475,7 +488,16 @@ static bool dispatchRank(const Gradebook& book, const std::vector<std::string>& 
     auto rows = rankList(book);
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
     if (v == "rank") {
-        if (!args.empty()) throw GradeError("usage: rank");
+        if (!args.empty() && args[0] == "section") {
+            if (args.size() != 2) throw GradeError("usage: rank section <name>");
+            std::vector<RankRow> hits;
+            for (const auto& r : rows)
+                if (book.student(r.id).section == args[1]) hits.push_back(r);
+            rerank(hits);
+            printRankRows(hits);
+            return true;
+        }
+        if (!args.empty()) throw GradeError("usage: rank [section <name>]");
         printRankRows(rows);
     } else if (v == "top") {
         std::size_t n = parseCount(args, "usage: top <N>");
@@ -654,6 +676,10 @@ static bool dispatchFilter(const Gradebook& book, const std::vector<std::string>
         if (tokens.size() != 4) throw GradeError("usage: filter percent <op> <value>");
         double v = parseNumber(tokens[3]);
         for (const auto& r : rows) if (applyOp(tokens[2], r.percent, v)) hits.push_back(r);
+    } else if (which == "section") {
+        if (tokens.size() != 3) throw GradeError("usage: filter section <name>");
+        for (const auto& r : rows)
+            if (book.student(r.id).section == tokens[2]) hits.push_back(r);
     } else if (which == "score") {
         if (tokens.size() != 5) throw GradeError("usage: filter score <subject> <op> <value>");
         const std::string& sname = tokens[2];
@@ -671,6 +697,22 @@ static bool dispatchFilter(const Gradebook& book, const std::vector<std::string>
 
     if (hits.empty()) std::cout << "(no matches)\n";
     else printRankRows(hits);
+    return true;
+}
+
+static bool dispatchSection(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "section") return false;
+    if (tokens.size() != 2 || tokens[1] != "list")
+        throw GradeError("usage: section list");
+    auto secs = book.sections();
+    if (secs.empty()) { std::cout << "(no sections)\n"; return true; }
+    std::cout << "  section   count\n";
+    for (const auto& s : secs) {
+        std::size_t n = 0;
+        for (const auto& [id, st] : book.students())
+            if (st.section == s) ++n;
+        std::cout << "  " << std::left << std::setw(8) << s << "  " << n << '\n';
+    }
     return true;
 }
 
@@ -807,7 +849,7 @@ int main() {
                 dispatchTopper(book, tokens) || dispatchHistogram(book, tokens)||
                 dispatchFind(book, tokens) || dispatchSort(book, tokens) ||
                 dispatchFilter(book, tokens) || dispatchSave(book, tokens) ||
-                dispatchLoad(book, tokens);
+                dispatchLoad(book, tokens) || dispatchSection(book, tokens);
             if (!handled) {
                 std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
                 continue;
