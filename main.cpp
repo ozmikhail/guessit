@@ -120,6 +120,7 @@ static void printHelp() {
         "  filter percent <op> <value>         op: >= > <= < ==\n"
         "  filter score <subject> <op> <value>\n"
         "  filter section <name>\n"
+        "  compare <sectionA> <sectionB>       side-by-side section stats\n"
         "  save <file>        write the gradebook to file\n"
         "  load <file>        merge directives from file\n"
         "  history            list previously entered commands\n"
@@ -700,6 +701,82 @@ static bool dispatchFilter(const Gradebook& book, const std::vector<std::string>
     return true;
 }
 
+struct SectionSummary {
+    std::size_t count{0};
+    double mean{0}, median{0}, stddev{0}, minPct{0}, maxPct{0};
+    double passRate{0};
+    std::string topId, bottomId;
+};
+
+static double median(std::vector<double> v) {
+    if (v.empty()) return 0.0;
+    std::sort(v.begin(), v.end());
+    std::size_t n = v.size();
+    return (n % 2) ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
+}
+
+static SectionSummary summariseSection(const Gradebook& book, const std::string& section) {
+    SectionSummary s;
+    std::vector<double> pcts;
+    double bestPct = -1.0, worstPct = 1e308;
+    std::size_t passed = 0;
+    for (const auto& [id, st] : book.students()) {
+        if (st.section != section) continue;
+        double p = book.percentFor(id);
+        pcts.push_back(p);
+        if (p > bestPct) { bestPct = p; s.topId = id; }
+        if (p < worstPct) { worstPct = p; s.bottomId = id; }
+        if (studentPasses(book, id)) ++passed;
+    }
+    s.count = pcts.size();
+    if (s.count == 0) return s;
+    double sum = 0.0;
+    for (double p : pcts) sum += p;
+    s.mean = sum / static_cast<double>(s.count);
+    s.median = median(pcts);
+    double sq = 0.0;
+    for (double p : pcts) sq += (p - s.mean) * (p - s.mean);
+    s.stddev = std::sqrt(sq / static_cast<double>(s.count));
+    s.minPct = worstPct;
+    s.maxPct = bestPct;
+    s.passRate = 100.0 * static_cast<double>(passed) / static_cast<double>(s.count);
+    return s;
+}
+
+static bool dispatchCompare(const Gradebook& book, const std::vector<std::string>& tokens) {
+    if (tokens.empty() || tokens[0] != "compare") return false;
+    if (tokens.size() != 3) throw GradeError("usage: compare <sectionA> <sectionB>");
+    auto a = summariseSection(book, tokens[1]);
+    auto b = summariseSection(book, tokens[2]);
+    if (a.count == 0 && b.count == 0) {
+        std::cout << "(both sections empty)\n";
+        return true;
+    }
+    auto row = [](const std::string& label, auto va, auto vb) {
+        std::cout << "  " << std::left << std::setw(12) << label
+                  << "  " << std::setw(14) << va << "  " << vb << '\n';
+    };
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "  " << std::left << std::setw(12) << ""
+              << "  " << std::setw(14) << tokens[1] << "  " << tokens[2] << '\n';
+    row("count", a.count, b.count);
+    row("mean %", a.mean, b.mean);
+    row("median %", a.median, b.median);
+    row("stddev %", a.stddev, b.stddev);
+    row("min %", a.minPct, b.minPct);
+    row("max %", a.maxPct, b.maxPct);
+    auto pct = [](double v) {
+        std::ostringstream o;
+        o << std::fixed << std::setprecision(2) << v << "%";
+        return o.str();
+    };
+    row("pass rate", pct(a.passRate), pct(b.passRate));
+    row("top", a.topId, b.topId);
+    row("bottom", a.bottomId, b.bottomId);
+    std::cout.unsetf(std::ios::fixed);
+    return true;
+}
+
 static bool dispatchSection(const Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "section") return false;
     if (tokens.size() != 2 || tokens[1] != "list")
@@ -849,7 +926,8 @@ int main() {
                 dispatchTopper(book, tokens) || dispatchHistogram(book, tokens)||
                 dispatchFind(book, tokens) || dispatchSort(book, tokens) ||
                 dispatchFilter(book, tokens) || dispatchSave(book, tokens) ||
-                dispatchLoad(book, tokens) || dispatchSection(book, tokens);
+                dispatchLoad(book, tokens) || dispatchSection(book, tokens) ||
+                dispatchCompare(book, tokens);
             if (!handled) {
                 std::cerr << "unknown command: " << tokens[0] << " (type 'help')\n";
                 continue;
