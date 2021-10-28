@@ -11,6 +11,7 @@ add_executable(guessit main.cpp)
 target_link_libraries(guessit PRIVATE guessit_core)
 target_compile_options(guessit PRIVATE -Wall -Wextra -Wpedantic)
 
+# GNU readline (Homebrew on macOS, or system package on Linux)
 find_library(READLINE_LIB readline
     HINTS /opt/homebrew/opt/readline/lib /usr/local/opt/readline/lib)
 find_path(READLINE_INCLUDE_DIR readline/readline.h
