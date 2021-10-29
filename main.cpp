@@ -899,7 +899,7 @@ int main() {
             if (!resolveBang(line, history)) continue;
         }
 
-        if (line == "help") { printHelp(); history.push_back(line); continue; }
+        if (line == "help") { printHelp(); continue; }
 
         if (line == "history") {
             if (history.empty()) std::cout << "(no history)\n";
@@ -912,7 +912,6 @@ int main() {
             book.subjects().clear();
             book.students().clear();
             std::cout << "gradebook cleared\n";
-            history.push_back(line);
             continue;
         }
 
