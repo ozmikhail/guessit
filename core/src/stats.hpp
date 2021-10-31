@@ -30,6 +30,7 @@ struct SubjectStats {
 };
 
 ClassStats classStats(const Gradebook& book);
+ClassStats sectionStats(const Gradebook& book, const std::string& section);
 SubjectStats subjectStats(const Gradebook& book, const std::string& subjectName);
 std::string topperOf(const Gradebook& book, const std::string& subjectName);
 std::vector<std::pair<std::string, std::size_t>> gradeHistogram(const Gradebook& book);

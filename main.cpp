@@ -701,53 +701,11 @@ static bool dispatchFilter(const Gradebook& book, const std::vector<std::string>
     return true;
 }
 
-struct SectionSummary {
-    std::size_t count{0};
-    double mean{0}, median{0}, stddev{0}, minPct{0}, maxPct{0};
-    double passRate{0};
-    std::string topId, bottomId;
-};
-
-static double median(std::vector<double> v) {
-    if (v.empty()) return 0.0;
-    std::sort(v.begin(), v.end());
-    std::size_t n = v.size();
-    return (n % 2) ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
-}
-
-static SectionSummary summariseSection(const Gradebook& book, const std::string& section) {
-    SectionSummary s;
-    std::vector<double> pcts;
-    double bestPct = -1.0, worstPct = 1e308;
-    std::size_t passed = 0;
-    for (const auto& [id, st] : book.students()) {
-        if (st.section != section) continue;
-        double p = book.percentFor(id);
-        pcts.push_back(p);
-        if (p > bestPct) { bestPct = p; s.topId = id; }
-        if (p < worstPct) { worstPct = p; s.bottomId = id; }
-        if (studentPasses(book, id)) ++passed;
-    }
-    s.count = pcts.size();
-    if (s.count == 0) return s;
-    double sum = 0.0;
-    for (double p : pcts) sum += p;
-    s.mean = sum / static_cast<double>(s.count);
-    s.median = median(pcts);
-    double sq = 0.0;
-    for (double p : pcts) sq += (p - s.mean) * (p - s.mean);
-    s.stddev = std::sqrt(sq / static_cast<double>(s.count));
-    s.minPct = worstPct;
-    s.maxPct = bestPct;
-    s.passRate = 100.0 * static_cast<double>(passed) / static_cast<double>(s.count);
-    return s;
-}
-
 static bool dispatchCompare(const Gradebook& book, const std::vector<std::string>& tokens) {
     if (tokens.empty() || tokens[0] != "compare") return false;
     if (tokens.size() != 3) throw GradeError("usage: compare <sectionA> <sectionB>");
-    auto a = summariseSection(book, tokens[1]);
-    auto b = summariseSection(book, tokens[2]);
+    auto a = sectionStats(book, tokens[1]);
+    auto b = sectionStats(book, tokens[2]);
     if (a.count == 0 && b.count == 0) {
         std::cout << "(both sections empty)\n";
         return true;
@@ -760,9 +718,9 @@ static bool dispatchCompare(const Gradebook& book, const std::vector<std::string
     std::cout << "  " << std::left << std::setw(12) << ""
               << "  " << std::setw(14) << tokens[1] << "  " << tokens[2] << '\n';
     row("count", a.count, b.count);
-    row("mean %", a.mean, b.mean);
-    row("median %", a.median, b.median);
-    row("stddev %", a.stddev, b.stddev);
+    row("mean %", a.meanPct, b.meanPct);
+    row("median %", a.medianPct, b.medianPct);
+    row("stddev %", a.stddevPct, b.stddevPct);
     row("min %", a.minPct, b.minPct);
     row("max %", a.maxPct, b.maxPct);
     auto pct = [](double v) {

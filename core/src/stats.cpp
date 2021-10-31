@@ -54,6 +54,32 @@ ClassStats classStats(const Gradebook& book) {
     return out;
 }
 
+ClassStats sectionStats(const Gradebook& book, const std::string& section) {
+    ClassStats out{};
+    std::vector<double> pcts;
+    double bestPct = -1.0, worstPct = 1e308;
+    std::size_t passed = 0;
+    for (const auto& [id, st] : book.students()) {
+        if (st.section != section) continue;
+        double p = book.percentFor(id);
+        pcts.push_back(p);
+        if (p > bestPct) { bestPct = p; out.topId = id; }
+        if (p < worstPct) { worstPct = p; out.bottomId = id; }
+        if (studentPasses(book, id)) ++passed;
+    }
+    out.count = pcts.size();
+    if (out.count == 0) return out;
+    double sum = 0.0;
+    for (double p : pcts) sum += p;
+    out.meanPct = sum / static_cast<double>(out.count);
+    out.medianPct = median(pcts);
+    out.stddevPct = stddev(pcts, out.meanPct);
+    out.minPct = worstPct;
+    out.maxPct = bestPct;
+    out.passRate = 100.0 * static_cast<double>(passed) / static_cast<double>(out.count);
+    return out;
+}
+
 SubjectStats subjectStats(const Gradebook& book, const std::string& subjectName) {
     const Subject& sub = book.subject(subjectName);
     SubjectStats out{};
